@@ -6,13 +6,13 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Spacer, Table, TableStyle, Paragraph
 from reportlab.lib.styles import ParagraphStyle
 
-# Configuration
+# === Configuration par défaut ===
 DEFAULT_COLS = 3
 DEFAULT_ROWS = 3
 DEFAULT_FONT_SIZE = 12
 CARD_TITLE = "Quizz Fonction publique territoriale"
 
-def generate_flashcards_recto_verso(excel_file, cols=DEFAULT_COLS, rows=DEFAULT_ROWS, font_size=DEFAULT_FONT_SIZE):
+def generate_flashcards_pdf_recto_verso(excel_file, cols=DEFAULT_COLS, rows=DEFAULT_ROWS, font_size=DEFAULT_FONT_SIZE):
     df = pd.read_excel(excel_file, usecols=[1,2], header=0)
     df.columns = ["Question", "Réponse"]
 
@@ -22,8 +22,6 @@ def generate_flashcards_recto_verso(excel_file, cols=DEFAULT_COLS, rows=DEFAULT_
     v_gap = 12
     usable_w = page_w - 2*margin
     usable_h = page_h - 2*margin
-
-    # Cartes carrées
     card_size = min((usable_w - (cols-1)*h_gap)/cols, (usable_h - (rows-1)*v_gap)/rows)
 
     style_center = ParagraphStyle(
@@ -34,7 +32,7 @@ def generate_flashcards_recto_verso(excel_file, cols=DEFAULT_COLS, rows=DEFAULT_
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=margin, rightMargin=margin, topMargin=margin, bottomMargin=margin)
     story = []
 
-    # Fonction pour créer une page avec du texte répété sur chaque carte
+    # Fonction pour créer une page avec texte répété dans toutes les cartes
     def create_page(texts):
         page_cells=[]
         idx=0
@@ -62,23 +60,24 @@ def generate_flashcards_recto_verso(excel_file, cols=DEFAULT_COLS, rows=DEFAULT_
         story.append(t)
         story.append(Spacer(1,10))
 
-    # --- Page recto : même texte pour toutes les cartes ---
-    total_cards = len(df)
-    recto_texts = [f"<b>{CARD_TITLE}</b>"]*total_cards
-    recto_pages = [recto_texts[i:i+cols*rows] for i in range(0, total_cards, cols*rows)]
-    for page in recto_pages:
-        create_page(page)
+    # Préparer toutes les cartes : question+réponse
+    texts_qr = [f"<b>Q:</b> {row['Question']}<br/><b>R:</b> {row['Réponse']}" for _, row in df.iterrows()]
 
-    # --- Page verso : question + réponse ---
-    verso_texts = [f"<b>Q:</b> {row['Question']}<br/><b>R:</b> {row['Réponse']}" for _, row in df.iterrows()]
-    verso_pages = [verso_texts[i:i+cols*rows] for i in range(0, total_cards, cols*rows)]
-    for page in verso_pages:
-        create_page(page)
+    per_page = cols*rows
+    # Créer pages par paires recto/verso
+    pages = [texts_qr[i:i+per_page] for i in range(0,len(texts_qr), per_page)]
+
+    for page_cards in pages:
+        # Recto : toutes les cartes identiques
+        recto_texts = [f"<b>{CARD_TITLE}</b>"]*len(page_cards)
+        create_page(recto_texts)
+
+        # Verso : questions + réponses correspondantes
+        create_page(page_cards)
 
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
-
 
 # ---------------- Streamlit UI ----------------
 st.set_page_config(page_title="Flashcards Recto-Verso", layout="centered")
@@ -95,7 +94,7 @@ uploaded_file = st.file_uploader("Choisis un fichier Excel (.xlsx)", type=["xlsx
 if uploaded_file:
     if st.button("Générer le PDF"):
         try:
-            pdf_bytes = generate_flashcards_recto_verso(uploaded_file, cols=int(cols), rows=int(rows), font_size=int(font_size))
+            pdf_bytes = generate_flashcards_pdf_recto_verso(uploaded_file, cols=int(cols), rows=int(rows), font_size=int(font_size))
             st.success("✅ PDF généré ! Les cartes sont prêtes à imprimer recto-verso.")
             st.download_button(
                 label="📥 Télécharger le PDF",
